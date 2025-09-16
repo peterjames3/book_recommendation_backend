@@ -1,5 +1,5 @@
 {
-  "name": "litkenya",
+  "name": "@litkenya/backend",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
@@ -10,16 +10,30 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "James Kimani"
+   
   ],
-  "author": "",
+  "author": "James Kimani",
   "license": "ISC",
-  "description": "",
+  "description": "Backend API for LitKenya book recommendation system",
   "dependencies": {
+    "@types/morgan": "^1.9.10",
+    "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.1.0",
     "nodemailer": "^7.0.6",
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "openai": "^5.20.3",
+    "reflect-metadata": "^0.2.2",
+    "sequelize": "^6.37.7",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "cors": "^2.8.5",
+    "morgan": "^1.10.1",
+    "typescript": "^5.9.2"
   }
 }
