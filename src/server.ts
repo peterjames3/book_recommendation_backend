@@ -11,7 +11,7 @@ import authRoutes from "./routes/auth";
 import bookRoutes from "./routes/books";
 import cartRoutes from "./routes/cart";
 import orderRoutes from "./routes/orders";
-import recommendationRoutes from "./routes/recommendations";
+import recommendationRoutes from './routes/recommendation';
 import searchRoutes from "./routes/search";
 import openLibraryRoutes from "./routes/openLibrary";
 

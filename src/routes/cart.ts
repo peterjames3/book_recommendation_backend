@@ -45,151 +45,180 @@ router.get("/", authenticateToken, async (req: AuthRequest, res) => {
 });
 
 // Add item to cart
+interface AddToCartRequestBody {
+    bookId: string;
+    quantity?: number;
+}
+
+interface AddToCartResponse {
+    success: boolean;
+    message?: string;
+    errors?: any[];
+    data?: any;
+}
+
 router.post(
-  "/add",
-  authenticateToken,
-  [
-    body("bookId").isUUID().withMessage("Valid book ID is required"),
-    body("quantity")
-      .isInt({ min: 1 })
-      .withMessage("Quantity must be at least 1"),
-  ],
-  async (req: AuthRequest, res) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: "Validation errors",
-          errors: errors.array(),
-        });
-      }
+    "/add",
+    authenticateToken,
+    [
+        body("bookId").isUUID().withMessage("Valid book ID is required"),
+        body("quantity")
+            .isInt({ min: 1 })
+            .withMessage("Quantity must be at least 1"),
+    ],
+    async (
+        req: AuthRequest & { body: AddToCartRequestBody },
+        res: express.Response<AddToCartResponse>
+    ) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Validation errors",
+                    errors: errors.array(),
+                });
+            }
 
-      const { bookId, quantity = 1 } = req.body;
+            const { bookId, quantity = 1 } = req.body;
 
-      // Check if book exists and is available
-      const book = await Book.findByPk(bookId);
-      if (!book) {
-        return res.status(404).json({
-          success: false,
-          message: "Book not found",
-        });
-      }
+            // Check if book exists and is available
+            const book = await Book.findByPk(bookId);
+            if (!book) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Book not found",
+                });
+            }
 
-      if (book.availability !== "available") {
-        return res.status(400).json({
-          success: false,
-          message: "Book is not available for purchase",
-        });
-      }
+            if (book.availability !== "available") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Book is not available for purchase",
+                });
+            }
 
-      // Check if item already exists in cart
-      const existingCartItem = await Cart.findOne({
-        where: {
-          userId: req.userId,
-          bookId,
-        },
-      });
+            // Check if item already exists in cart
+            const existingCartItem = await Cart.findOne({
+                where: {
+                    userId: req.userId,
+                    bookId,
+                },
+            });
 
-      if (existingCartItem) {
-        // Update quantity
-        existingCartItem.quantity += Number(quantity);
-        await existingCartItem.save();
+            if (existingCartItem) {
+                // Update quantity
+                existingCartItem.quantity += Number(quantity);
+                await existingCartItem.save();
 
-        const updatedItem = await Cart.findByPk(existingCartItem.id, {
-          include: [{ model: Book, as: "book" }],
-        });
+                const updatedItem = await Cart.findByPk(existingCartItem.id, {
+                    include: [{ model: Book, as: "book" }],
+                });
 
-        res.json({
-          success: true,
-          message: "Cart updated successfully",
-          data: updatedItem,
-        });
-      } else {
-        // Create new cart item
-        const cartItem = await Cart.create({
-          userId: req.userId!,
-          bookId,
-          quantity: Number(quantity),
-        });
+                res.json({
+                    success: true,
+                    message: "Cart updated successfully",
+                    data: updatedItem,
+                });
+            } else {
+                // Create new cart item
+                const cartItem = await Cart.create({
+                    userId: req.userId!,
+                    bookId,
+                    quantity: Number(quantity),
+                });
 
-        const newItem = await Cart.findByPk(cartItem.id, {
-          include: [{ model: Book, as: "book" }],
-        });
+                const newItem = await Cart.findByPk(cartItem.id, {
+                    include: [{ model: Book, as: "book" }],
+                });
 
-        res.status(201).json({
-          success: true,
-          message: "Item added to cart successfully",
-          data: newItem,
-        });
-      }
-    } catch (error) {
-      console.error("Add to cart error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Failed to add item to cart",
-      });
+                res.status(201).json({
+                    success: true,
+                    message: "Item added to cart successfully",
+                    data: newItem,
+                });
+            }
+        } catch (error) {
+            console.error("Add to cart error:", error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to add item to cart",
+            });
+        }
     }
-  }
 );
 
 // Update cart item quantity
+interface UpdateCartItemRequestBody {
+    quantity: number;
+}
+
+interface UpdateCartItemResponse {
+    success: boolean;
+    message?: string;
+    errors?: any[];
+    data?: any;
+}
+
 router.put(
-  "/update/:itemId",
-  authenticateToken,
-  [
-    body("quantity")
-      .isInt({ min: 1 })
-      .withMessage("Quantity must be at least 1"),
-  ],
-  async (req: AuthRequest, res) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: "Validation errors",
-          errors: errors.array(),
-        });
-      }
+    "/update/:itemId",
+    authenticateToken,
+    [
+        body("quantity")
+            .isInt({ min: 1 })
+            .withMessage("Quantity must be at least 1"),
+    ],
+    async (
+        req: AuthRequest & { body: UpdateCartItemRequestBody },
+        res: express.Response<UpdateCartItemResponse>
+    ) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Validation errors",
+                    errors: errors.array(),
+                });
+            }
 
-      const { itemId } = req.params;
-      const { quantity } = req.body;
+            const { itemId } = req.params;
+            const { quantity } = req.body;
 
-      const cartItem = await Cart.findOne({
-        where: {
-          id: itemId,
-          userId: req.userId,
-        },
-      });
+            const cartItem = await Cart.findOne({
+                where: {
+                    id: itemId,
+                    userId: req.userId,
+                },
+            });
 
-      if (!cartItem) {
-        return res.status(404).json({
-          success: false,
-          message: "Cart item not found",
-        });
-      }
+            if (!cartItem) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Cart item not found",
+                });
+            }
 
-      cartItem.quantity = Number(quantity);
-      await cartItem.save();
+            cartItem.quantity = Number(quantity);
+            await cartItem.save();
 
-      const updatedItem = await Cart.findByPk(cartItem.id, {
-        include: [{ model: Book, as: "book" }],
-      });
+            const updatedItem = await Cart.findByPk(cartItem.id, {
+                include: [{ model: Book, as: "book" }],
+            });
 
-      res.json({
-        success: true,
-        message: "Cart item updated successfully",
-        data: updatedItem,
-      });
-    } catch (error) {
-      console.error("Update cart item error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Failed to update cart item",
-      });
+            res.json({
+                success: true,
+                message: "Cart item updated successfully",
+                data: updatedItem,
+            });
+        } catch (error) {
+            console.error("Update cart item error:", error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to update cart item",
+            });
+        }
     }
-  }
 );
 
 // Remove item from cart

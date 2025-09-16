@@ -149,24 +149,24 @@ class OpenLibraryService {
     };
 
     return {
-      openLibraryId: book.key,
-      title: book.title || "",
+      openLibraryId: olBook.key,
+      title: olBook.title || "",
       authors:
-        book.author_name ||
-        (book.authors ? book.authors.map((a: any) => a.name) : []),
-      isbn: book.isbn ? book.isbn[0] : undefined,
-      isbn13: book.isbn_13 ? book.isbn_13[0] : undefined,
-      description: getDescription(book.description),
-      publishedDate: book.first_publish_year
-        ? book.first_publish_year.toString()
-        : book.first_publish_date,
-      pageCount: book.number_of_pages_median || book.number_of_pages,
-      categories: book.subject ? book.subject.slice(0, 5) : [], // Limit to 5 categories
-      imageUrl: getCoverUrl(book),
-      rating: book.ratings_average
-        ? Math.round(book.ratings_average * 10) / 10
+        olBook.author_name ||
+        (olBook.authors ? olBook.authors.map((a: any) => a.name) : []),
+      isbn: olBook.isbn ? olBook.isbn[0] : undefined,
+      isbn13: olBook.isbn_13 ? olBook.isbn_13[0] : undefined,
+      description: getDescription(olBook.description),
+      publishedDate: olBook.first_publish_year
+        ? olBook.first_publish_year.toString()
+        : olBook.first_publish_date,
+      pageCount: olBook.number_of_pages_median || olBook.number_of_pages,
+      categories: olBook.subject ? olBook.subject.slice(0, 5) : [], // Limit to 5 categories
+      imageUrl: getCoverUrl(olBook),
+      rating: olBook.ratings_average
+        ? Math.round(olBook.ratings_average * 10) / 10
         : undefined,
-      ratingsCount: book.ratings_count || 0,
+      ratingsCount: olBook.ratings_count || 0,
       price: price || Math.floor(Math.random() * 30) + 10, // Random price between $10-40
       availability: "available" as const,
     };

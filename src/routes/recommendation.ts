@@ -7,7 +7,7 @@ import {
   optionalAuth,
   AuthRequest,
 } from "../middleware/auth";
-import llmService from "../services/llmService";
+import llmService from "../services/llmServices";
 
 const router = express.Router();
 

@@ -79,7 +79,11 @@ async function populateBooks(): Promise<void> {
           }
         } catch (error) {
           errors++;
-          console.error(`   ❌ Error importing book:`, error.message);
+          if (error instanceof Error) {
+            console.error(`   ❌ Error importing book:`, error.message);
+          } else {
+            console.error(`   ❌ Error importing book:`, error);
+          }
         }
       }
 
@@ -100,7 +104,7 @@ async function populateBooks(): Promise<void> {
       results.push({ subject, imported: 0, errors: 1 });
       console.error(
         `   ❌ Error processing subject ${subject}:`,
-        error.message
+        error instanceof Error ? error.message : String(error)
       );
     }
   }
@@ -234,7 +238,11 @@ async function addSampleBooks(): Promise<void> {
         console.log(`   ⏭️  Skipped (exists): ${bookData.title}`);
       }
     } catch (error) {
-      console.error(`   ❌ Error adding ${bookData.title}:`, error.message);
+      if (error instanceof Error) {
+        console.error(`   ❌ Error adding ${bookData.title}:`, error.message);
+      } else {
+        console.error(`   ❌ Error adding ${bookData.title}:`, error);
+      }
     }
   }
 

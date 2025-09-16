@@ -1,6 +1,15 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { User } from "../models/User";
+
+// Check for JWT_SECRET once at the top
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET is not defined");
+}
+
+// Store the secret in a constant
+const JWT_SECRET = process.env.JWT_SECRET as string;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 export interface AuthRequest extends Request {
   user?: User;
@@ -24,7 +33,7 @@ export const authenticateToken = async (
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+    const decoded = jwt.verify(token, JWT_SECRET) as {
       userId: string;
     };
 
@@ -59,7 +68,7 @@ export const optionalAuth = async (
     const token = authHeader && authHeader.split(" ")[1];
 
     if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+      const decoded = jwt.verify(token, JWT_SECRET) as {
         userId: string;
       };
       const user = await User.findByPk(decoded.userId);
@@ -78,7 +87,14 @@ export const optionalAuth = async (
 };
 
 export const generateToken = (userId: string): string => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET!, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  });
+  const options: SignOptions = {
+    expiresIn: Number(JWT_EXPIRES_IN),
+  };
+
+  return jwt.sign({ userId }, JWT_SECRET, options);
 };
+// export const generateToken = (userId: string): string => {
+//   return jwt.sign({ userId }, JWT_SECRET, {
+//     expiresIn: JWT_EXPIRES_IN,
+//   });
+// };

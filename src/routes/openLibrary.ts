@@ -6,105 +6,130 @@ import { body, validationResult } from "express-validator";
 const router = express.Router();
 
 // Search Open Library and optionally save books to database
+interface SearchRequestBody {
+    query: string;
+    limit?: number;
+    offset?: number;
+    saveToDatabase?: boolean;
+}
+
+interface PaginationInfo {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+    hasMore: boolean;
+}
+
+interface SearchResponseData {
+    books: any[]; // Replace 'any' with your Book type if available
+    totalFound: number;
+    source: string;
+    savedToDatabase: boolean;
+    savedCount: number;
+    pagination: PaginationInfo;
+}
+
 router.post(
-  "/search",
-  [
-    body("query").notEmpty().withMessage("Search query is required"),
-    body("limit")
-      .optional()
-      .isInt({ min: 1, max: 100 })
-      .withMessage("Limit must be between 1 and 100"),
-    body("offset")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Offset must be non-negative"),
-    body("saveToDatabase")
-      .optional()
-      .isBoolean()
-      .withMessage("saveToDatabase must be boolean"),
-  ],
-  async (req, res) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: "Validation errors",
-          errors: errors.array(),
-        });
-      }
-
-      const {
-        query,
-        limit = 20,
-        offset = 0,
-        saveToDatabase = false,
-      } = req.body;
-
-      // Search Open Library
-      const searchResults = await openLibraryService.searchBooks(
-        query,
-        Number(limit),
-        Number(offset)
-      );
-
-      // Transform results to our format
-      const transformedBooks = searchResults.docs.map((book) =>
-        openLibraryService.transformToBook(book)
-      );
-
-      let savedBooks = [];
-
-      if (saveToDatabase) {
-        // Save books to database (avoid duplicates)
-        for (const bookData of transformedBooks) {
-          try {
-            // Check if book already exists
-            const existingBook = await Book.findOne({
-              where: {
-                openLibraryId: bookData.openLibraryId,
-              },
-            });
-
-            if (!existingBook) {
-              const savedBook = await Book.create(bookData);
-              savedBooks.push(savedBook);
-            } else {
-              savedBooks.push(existingBook);
+    "/search",
+    [
+        body("query").notEmpty().withMessage("Search query is required"),
+        body("limit")
+            .optional()
+            .isInt({ min: 1, max: 100 })
+            .withMessage("Limit must be between 1 and 100"),
+        body("offset")
+            .optional()
+            .isInt({ min: 0 })
+            .withMessage("Offset must be non-negative"),
+        body("saveToDatabase")
+            .optional()
+            .isBoolean()
+            .withMessage("saveToDatabase must be boolean"),
+    ],
+    async (
+        req: express.Request<{}, any, SearchRequestBody>,
+        res: express.Response
+    ): Promise<void> => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return ;
             }
-          } catch (error) {
-            console.error("Error saving book:", error);
-            // Continue with other books even if one fails
-          }
-        }
-      }
 
-      res.json({
-        success: true,
-        data: {
-          books: saveToDatabase ? savedBooks : transformedBooks,
-          totalFound: searchResults.numFound,
-          source: "Open Library",
-          savedToDatabase: saveToDatabase,
-          savedCount: savedBooks.length,
-          pagination: {
-            currentPage: Math.floor(Number(offset) / Number(limit)) + 1,
-            totalPages: Math.ceil(searchResults.numFound / Number(limit)),
-            totalItems: searchResults.numFound,
-            itemsPerPage: Number(limit),
-            hasMore:
-              Number(offset) + transformedBooks.length < searchResults.numFound,
-          },
-        },
-      });
-    } catch (error) {
-      console.error("Open Library search error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Failed to search Open Library",
-      });
+            const {
+                query,
+                limit = 20,
+                offset = 0,
+                saveToDatabase = false,
+            } = req.body;
+
+            // Search Open Library
+            const searchResults: any = await openLibraryService.searchBooks(
+                query,
+                Number(limit),
+                Number(offset)
+            );
+
+            // Transform results to our format
+            const transformedBooks: any[] = searchResults.docs.map((book: any) =>
+                openLibraryService.transformToBook(book)
+            );
+
+            let savedBooks: any[] = [];
+
+            if (saveToDatabase) {
+                // Save books to database (avoid duplicates)
+                for (const bookData of transformedBooks) {
+                    try {
+                        // Check if book already exists
+                        const existingBook = await Book.findOne({
+                            where: {
+                                openLibraryId: bookData.openLibraryId,
+                            },
+                        });
+
+                        if (!existingBook) {
+                            const savedBook = await Book.create(bookData);
+                            savedBooks.push(savedBook);
+                        } else {
+                            savedBooks.push(existingBook);
+                        }
+                    } catch (error) {
+                        console.error("Error saving book:", error);
+                        // Continue with other books even if one fails
+                    }
+                }
+            }
+
+            const responseData: SearchResponseData = {
+                books: saveToDatabase ? savedBooks : transformedBooks,
+                totalFound: searchResults.numFound,
+                source: "Open Library",
+                savedToDatabase: saveToDatabase,
+                savedCount: savedBooks.length,
+                pagination: {
+                    currentPage: Math.floor(Number(offset) / Number(limit)) + 1,
+                    totalPages: Math.ceil(searchResults.numFound / Number(limit)),
+                    totalItems: searchResults.numFound,
+                    itemsPerPage: Number(limit),
+                    hasMore:
+                        Number(offset) + transformedBooks.length < searchResults.numFound,
+                },
+            };
+
+            res.json({
+                success: true,
+                data: responseData,
+            });
+        } catch (error: any) {
+            console.error("Open Library search error:", error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to search Open Library",
+            });
+        }
     }
-  }
 );
 
 // Get books by subject from Open Library
@@ -278,99 +303,117 @@ router.get("/book/:key", async (req, res) => {
 });
 
 // Bulk import books from Open Library by subjects
+interface BulkImportRequestBody {
+    subjects: string[];
+    booksPerSubject?: number;
+}
+
+interface ImportResult {
+    subject: string;
+    found: number;
+    imported: number;
+    error?: string;
+}
+
+interface BulkImportResponseData {
+    totalImported: number;
+    results: ImportResult[];
+}
+
 router.post(
-  "/bulk-import",
-  [
-    body("subjects").isArray().withMessage("Subjects must be an array"),
-    body("booksPerSubject")
-      .optional()
-      .isInt({ min: 1, max: 50 })
-      .withMessage("Books per subject must be between 1 and 50"),
-  ],
-  async (req, res) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: "Validation errors",
-          errors: errors.array(),
-        });
-      }
-
-      const { subjects, booksPerSubject = 20 } = req.body;
-      const importResults = [];
-      let totalImported = 0;
-
-      for (const subject of subjects) {
+    "/bulk-import",
+    [
+        body("subjects").isArray().withMessage("Subjects must be an array"),
+        body("booksPerSubject")
+            .optional()
+            .isInt({ min: 1, max: 50 })
+            .withMessage("Books per subject must be between 1 and 50"),
+    ],
+    async (
+        req: express.Request<{}, any, BulkImportRequestBody>,
+        res: express.Response
+    ): Promise<void> => {
         try {
-          const searchResults = await openLibraryService.searchBySubject(
-            subject,
-            Number(booksPerSubject)
-          );
-
-          const transformedBooks = searchResults.docs.map((book) =>
-            openLibraryService.transformToBook(book)
-          );
-
-          let importedCount = 0;
-
-          for (const bookData of transformedBooks) {
-            try {
-              const existingBook = await Book.findOne({
-                where: {
-                  openLibraryId: bookData.openLibraryId,
-                },
-              });
-
-              if (!existingBook) {
-                await Book.create(bookData);
-                importedCount++;
-                totalImported++;
-              }
-            } catch (error) {
-              console.error(
-                `Error importing book for subject ${subject}:`,
-                error
-              );
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return;
             }
-          }
 
-          importResults.push({
-            subject,
-            found: searchResults.docs.length,
-            imported: importedCount,
-          });
+            const { subjects, booksPerSubject = 20 } = req.body;
+            const importResults: ImportResult[] = [];
+            let totalImported = 0;
 
-          // Add delay to avoid overwhelming the API
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+            for (const subject of subjects) {
+                try {
+                    const searchResults: any = await openLibraryService.searchBySubject(
+                        subject,
+                        Number(booksPerSubject)
+                    );
+
+                    const transformedBooks: any[] = searchResults.docs.map((book: any) =>
+                        openLibraryService.transformToBook(book)
+                    );
+
+                    let importedCount = 0;
+
+                    for (const bookData of transformedBooks) {
+                        try {
+                            const existingBook = await Book.findOne({
+                                where: {
+                                    openLibraryId: bookData.openLibraryId,
+                                },
+                            });
+
+                            if (!existingBook) {
+                                await Book.create(bookData);
+                                importedCount++;
+                                totalImported++;
+                            }
+                        } catch (error) {
+                            console.error(
+                                `Error importing book for subject ${subject}:`,
+                                error
+                            );
+                        }
+                    }
+
+                    importResults.push({
+                        subject,
+                        found: searchResults.docs.length,
+                        imported: importedCount,
+                    });
+
+                    // Add delay to avoid overwhelming the API
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                } catch (error: any) {
+                    console.error(`Error processing subject ${subject}:`, error);
+                    importResults.push({
+                        subject,
+                        found: 0,
+                        imported: 0,
+                        error: error.message,
+                    });
+                }
+            }
+
+            const responseData: BulkImportResponseData = {
+                totalImported,
+                results: importResults,
+            };
+
+            res.json({
+                success: true,
+                message: `Bulk import completed. ${totalImported} books imported.`,
+                data: responseData,
+            });
         } catch (error) {
-          console.error(`Error processing subject ${subject}:`, error);
-          importResults.push({
-            subject,
-            found: 0,
-            imported: 0,
-            error: error.message,
-          });
+            console.error("Bulk import error:", error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to perform bulk import",
+            });
         }
-      }
-
-      res.json({
-        success: true,
-        message: `Bulk import completed. ${totalImported} books imported.`,
-        data: {
-          totalImported,
-          results: importResults,
-        },
-      });
-    } catch (error) {
-      console.error("Bulk import error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Failed to perform bulk import",
-      });
     }
-  }
 );
 
 export default router;

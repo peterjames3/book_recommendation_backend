@@ -3,7 +3,7 @@ import { User } from "../models/User";
 import { Book } from "../models/Book";
 import { Cart } from "../models/Cart";
 import { Order } from "../models/Order";
-import { OrderItem } from "../models/OrderItem";
+import { OrderItem } from "../models/Orderitem";
 import dotenv from "dotenv";
 
 dotenv.config();
