@@ -11,8 +11,8 @@ import {
   Index,
 } from "sequelize-typescript";
 import { v4 as uuidv4 } from "uuid";
-import { Cart } from "./Cart";
-import { OrderItem } from "./OrderItem";
+import { Cart } from "./Cart.ts";
+import { OrderItem } from "./Orderitem.ts";
 
 @Table({
   tableName: "books",

@@ -11,8 +11,8 @@ import {
   BelongsTo,
 } from "sequelize-typescript";
 import { v4 as uuidv4 } from "uuid";
-import { User } from "./User";
-import { Book } from "./Book";
+import { User } from "./User.ts";
+import { Book } from "./Book.ts";
 
 @Table({
   tableName: "cart",

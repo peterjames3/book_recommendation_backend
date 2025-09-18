@@ -12,8 +12,8 @@ import {
   HasMany,
 } from "sequelize-typescript";
 import { v4 as uuidv4 } from "uuid";
-import { User } from "./User";
-import { OrderItem } from "./OrderItem";
+import { User } from "./User.ts";
+import { OrderItem } from "./Orderitem.ts";
 
 export interface Address {
   street: string;

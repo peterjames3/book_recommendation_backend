@@ -1,9 +1,9 @@
 import { Sequelize } from "sequelize-typescript";
-import { User } from "../models/User";
-import { Book } from "../models/Book";
-import { Cart } from "../models/Cart";
-import { Order } from "../models/Order";
-import { OrderItem } from "../models/Orderitem";
+import { User } from "../models/User.ts";
+import { Book } from "../models/Book.ts";
+import { Cart } from "../models/Cart.ts";
+import { Order } from "../models/Order.ts";
+import { OrderItem } from "../models/Orderitem.ts";
 import dotenv from "dotenv";
 
 dotenv.config();
