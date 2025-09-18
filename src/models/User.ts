@@ -13,8 +13,8 @@ import {
 } from "sequelize-typescript";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcryptjs";
-import { Cart } from "./Cart";
-import { Order } from "./Order";
+import { Cart } from "./Cart.ts";
+import { Order } from "./Order.ts";
 
 export interface UserPreferences {
   favoriteGenres: string[];

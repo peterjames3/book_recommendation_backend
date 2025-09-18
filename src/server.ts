@@ -6,14 +6,14 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 
-import { initializeDatabase } from "./config/database";
-import authRoutes from "./routes/auth";
-import bookRoutes from "./routes/books";
-import cartRoutes from "./routes/cart";
-import orderRoutes from "./routes/orders";
-import recommendationRoutes from './routes/recommendation';
-import searchRoutes from "./routes/search";
-import openLibraryRoutes from "./routes/openLibrary";
+import  { initializeDatabase } from "./config/database.ts";
+import authRoutes from "./routes/auth.ts";
+import bookRoutes from "./routes/books.ts";
+import cartRoutes from "./routes/cart.ts";
+import orderRoutes from "./routes/orders.ts";
+import recommendationRoutes from "./routes/recommendation.ts";
+import searchRoutes from "./routes/search.ts";
+import openLibraryRoutes from "./routes/openLibrary.ts";
 
 // Load environment variables
 dotenv.config();
