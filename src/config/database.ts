@@ -8,13 +8,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const sequelize = new Sequelize({
-  database: process.env.DB_NAME || "litkenya_books",
+const sequelize = new Sequelize(process.env.DATABASE_URL || "", {
   dialect: "postgres",
-  host: process.env.DB_HOST || "localhost",
-  port: parseInt(process.env.DB_PORT || "5432"),
-  username: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD || "password",
   models: [User, Book, Cart, Order, OrderItem],
   logging: process.env.NODE_ENV === "development" ? console.log : false,
   pool: {
@@ -22,6 +17,12 @@ const sequelize = new Sequelize({
     min: 0,
     acquire: 30000,
     idle: 10000,
+  },
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false, // This is important for Supabase
+    },
   },
 });
 

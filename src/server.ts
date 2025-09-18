@@ -6,7 +6,7 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 
-import  { initializeDatabase } from "./config/database.ts";
+import { initializeDatabase } from "./config/database.ts";
 import authRoutes from "./routes/auth.ts";
 import bookRoutes from "./routes/books.ts";
 import cartRoutes from "./routes/cart.ts";
@@ -60,13 +60,12 @@ app.use("/api/search", searchRoutes);
 app.use("/api/open-library", openLibraryRoutes);
 
 // 404 handler
-app.use("*", (req, res) => {
+app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: "Route not found",
   });
 });
-
 // Global error handler
 app.use(
   (

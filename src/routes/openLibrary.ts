@@ -199,8 +199,64 @@ router.get("/subject/:subject", async (req, res) => {
   }
 });
 
-// Get popular books from Open Library
-router.get("/popular/:subject?", async (req, res) => {
+// Get popular books from Open Library (without subject)
+router.get("/popular", async (req, res) => {
+  try {
+    const { limit = 20, saveToDatabase = false } = req.query;
+
+    const searchResults = await openLibraryService.getPopularBooks(
+      undefined, // No subject
+      Number(limit)
+    );
+
+    const transformedBooks = searchResults.docs.map((book) =>
+      openLibraryService.transformToBook(book)
+    );
+
+    let savedBooks = [];
+
+    if (saveToDatabase === "true") {
+      for (const bookData of transformedBooks) {
+        try {
+          const existingBook = await Book.findOne({
+            where: {
+              openLibraryId: bookData.openLibraryId,
+            },
+          });
+
+          if (!existingBook) {
+            const savedBook = await Book.create(bookData);
+            savedBooks.push(savedBook);
+          } else {
+            savedBooks.push(existingBook);
+          }
+        } catch (error) {
+          console.error("Error saving book:", error);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        books: saveToDatabase === "true" ? savedBooks : transformedBooks,
+        subject: "all",
+        source: "Open Library",
+        savedToDatabase: saveToDatabase === "true",
+        savedCount: savedBooks.length,
+      },
+    });
+  } catch (error) {
+    console.error("Open Library popular books error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get popular books from Open Library",
+    });
+  }
+});
+
+// Get popular books by subject from Open Library
+router.get("/popular/:subject", async (req, res) => {
   try {
     const { subject } = req.params;
     const { limit = 20, saveToDatabase = false } = req.query;
@@ -241,7 +297,7 @@ router.get("/popular/:subject?", async (req, res) => {
       success: true,
       data: {
         books: saveToDatabase === "true" ? savedBooks : transformedBooks,
-        subject: subject || "all",
+        subject: subject,
         source: "Open Library",
         savedToDatabase: saveToDatabase === "true",
         savedCount: savedBooks.length,
