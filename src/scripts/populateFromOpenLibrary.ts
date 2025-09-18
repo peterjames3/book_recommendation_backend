@@ -1,7 +1,7 @@
 import "reflect-metadata";
-import { initializeDatabase } from "../config/database";
-import { Book } from "../models/Book";
-import openLibraryService from "../services/openLibraryService";
+import { initializeDatabase } from "../config/database.ts";
+import { Book } from "../models/Book.ts";
+import openLibraryService from "../services/openLibraryService.ts";
 
 const POPULAR_SUBJECTS = [
   "fiction",

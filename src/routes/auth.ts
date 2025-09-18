@@ -1,11 +1,11 @@
 import express from "express";
 import { body, validationResult } from "express-validator";
-import { User } from "../models/User";
+import { User } from "../models/User.ts";
 import {
   authenticateToken,
   generateToken,
   AuthRequest,
-} from "../middleware/auth";
+} from "../middleware/auth.ts";
 
 const router = express.Router();
 

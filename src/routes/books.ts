@@ -1,8 +1,8 @@
 import express from "express";
 import { Op } from "sequelize";
-import { Book } from "../models/Book";
-import { optionalAuth, AuthRequest } from "../middleware/auth";
-import llmService from "../services/llmServices";
+import { Book } from "../models/Book.ts";
+import { optionalAuth, AuthRequest } from "../middleware/auth.ts";
+import llmService from "../services/llmServices.ts";
 
 const router = express.Router();
 

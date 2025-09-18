@@ -1,7 +1,7 @@
 import express from "express";
-import { Cart } from "../models/Cart";
-import { Book } from "../models/Book";
-import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { Cart } from "../models/Cart.ts";
+import { Book } from "../models/Book.ts";
+import { authenticateToken, AuthRequest } from "../middleware/auth.ts";
 import { body, validationResult } from "express-validator";
 
 const router = express.Router();

@@ -1,13 +1,13 @@
 import express from "express";
 import { Op } from "sequelize";
-import { Book } from "../models/Book";
-import { User } from "../models/User";
+import { Book } from "../models/Book.ts";
+import { User } from "../models/User.ts";
 import {
   authenticateToken,
   optionalAuth,
   AuthRequest,
-} from "../middleware/auth";
-import llmService from "../services/llmServices";
+} from "../middleware/auth.ts";
+import llmService from "../services/llmServices.ts";
 
 const router = express.Router();
 

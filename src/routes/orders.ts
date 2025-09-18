@@ -1,11 +1,11 @@
 import express from "express";
-import { Order } from "../models/Order";
-import { OrderItem } from "../models/Orderitem";
-import { Cart } from "../models/Cart";
-import { Book } from "../models/Book";
-import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { Order } from "../models/Order.ts";
+import { OrderItem } from "../models/Orderitem.ts";
+import { Cart } from "../models/Cart.ts";
+import { Book } from "../models/Book.ts";
+import { authenticateToken, AuthRequest } from "../middleware/auth.ts";
 import { body, validationResult } from "express-validator";
-import sequelize from "../config/database";
+import sequelize from "../config/database.ts";
 
 const router = express.Router();
 

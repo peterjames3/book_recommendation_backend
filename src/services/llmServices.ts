@@ -1,6 +1,6 @@
 import OpenAI from "openai";
-import { Book } from "../models/Book";
-import { User } from "../models/User";
+import { Book } from "../models/Book.ts";
+import { User } from "../models/User.ts";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

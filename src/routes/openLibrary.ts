@@ -1,6 +1,6 @@
 import express from "express";
-import { Book } from "../models/Book";
-import openLibraryService from "../services/openLibraryService";
+import { Book } from "../models/Book.ts";
+import openLibraryService from "../services/openLibraryService.ts";
 import { body, validationResult } from "express-validator";
 
 const router = express.Router();

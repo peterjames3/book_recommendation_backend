@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt, { SignOptions } from "jsonwebtoken";
-import { User } from "../models/User";
+import { User } from "../models/User.ts";
 
 // Check for JWT_SECRET once at the top
 if (!process.env.JWT_SECRET) {
