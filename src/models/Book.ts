@@ -22,10 +22,14 @@ import { OrderItem } from "./Orderitem.ts";
       fields: ["title"],
     },
     {
+      // GIN index for array column
       fields: ["authors"],
+      using: "GIN",
     },
     {
+      // GIN index for array column
       fields: ["categories"],
+      using: "GIN",
     },
     {
       fields: ["isbn"],
@@ -54,7 +58,6 @@ export class Book extends Model {
   })
   title!: string;
 
-  @Index
   @Column({
     type: DataType.ARRAY(DataType.STRING),
     allowNull: false,
@@ -94,7 +97,6 @@ export class Book extends Model {
   })
   pageCount?: number;
 
-  @Index
   @Column({
     type: DataType.ARRAY(DataType.STRING),
     allowNull: false,
