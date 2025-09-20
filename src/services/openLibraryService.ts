@@ -41,18 +41,51 @@ export interface OpenLibrarySearchResult {
   start: number;
 }
 
+export interface OpenLibrarySubjectResult {
+  key: string;
+  name: string;
+  work_count: number;
+  works: Array<{
+    key: string;
+    title: string;
+    authors: Array<{ key: string; name: string }>;
+    cover_id?: number;
+    first_publish_year?: number;
+    availability?: {
+      status: string;
+      available_to_borrow?: boolean;
+      available_to_waitlist?: boolean;
+    };
+  }>;
+}
+
 class OpenLibraryService {
   private async makeRequest<T>(url: string): Promise<T> {
     try {
+      console.log(`🌐 Making request to: ${url}`);
       const response = await axios.get(url, {
         timeout: 10000,
         headers: {
           "User-Agent": "LitKenya-BookRecommendation/1.0",
         },
       });
+
+      // Log response structure for debugging
+      console.log(`📥 Response keys: ${Object.keys(response.data).join(", ")}`);
+      if (response.data.docs) {
+        console.log(`📚 Found ${response.data.docs.length} docs`);
+      }
+      if (response.data.works) {
+        console.log(`📚 Found ${response.data.works.length} works`);
+      }
+
       return response.data;
     } catch (error) {
       console.error("Open Library API error:", error);
+      if (axios.isAxiosError(error)) {
+        console.error(`Status: ${error.response?.status}`);
+        console.error(`Response: ${JSON.stringify(error.response?.data)}`);
+      }
       throw new Error("Failed to fetch data from Open Library");
     }
   }
@@ -72,9 +105,20 @@ class OpenLibraryService {
     subject: string,
     limit: number = 20,
     offset: number = 0
-  ): Promise<OpenLibrarySearchResult> {
+  ): Promise<OpenLibrarySubjectResult> {
     const encodedSubject = encodeURIComponent(subject);
     const url = `${OPEN_LIBRARY_BASE_URL}/subjects/${encodedSubject}.json?limit=${limit}&offset=${offset}`;
+
+    return this.makeRequest<OpenLibrarySubjectResult>(url);
+  }
+
+  async searchBooksBySubject(
+    subject: string,
+    limit: number = 20,
+    offset: number = 0
+  ): Promise<OpenLibrarySearchResult> {
+    const encodedSubject = encodeURIComponent(`subject:"${subject}"`);
+    const url = `${OPEN_LIBRARY_BASE_URL}/search.json?q=${encodedSubject}&limit=${limit}&offset=${offset}&fields=key,title,author_name,isbn,first_publish_year,number_of_pages_median,subject,cover_i,ratings_average,ratings_count,publisher`;
 
     return this.makeRequest<OpenLibrarySearchResult>(url);
   }
@@ -107,11 +151,10 @@ class OpenLibraryService {
     let url: string;
 
     if (subject) {
-      const encodedSubject = encodeURIComponent(subject.toLowerCase());
-      url = `${OPEN_LIBRARY_BASE_URL}/subjects/${encodedSubject}.json?limit=${limit}&sort=rating`;
+      const encodedSubject = encodeURIComponent(`subject:"${subject}"`);
+      url = `${OPEN_LIBRARY_BASE_URL}/search.json?q=${encodedSubject}&sort=rating+desc&limit=${limit}&fields=key,title,author_name,isbn,first_publish_year,number_of_pages_median,subject,cover_i,ratings_average,ratings_count,publisher`;
     } else {
-      // Get trending books by searching for recent popular titles
-      url = `${OPEN_LIBRARY_BASE_URL}/search.json?q=*&sort=rating&limit=${limit}&fields=key,title,author_name,isbn,first_publish_year,number_of_pages_median,subject,cover_i,ratings_average,ratings_count,publisher`;
+      url = `${OPEN_LIBRARY_BASE_URL}/search.json?q=*&sort=rating+desc&limit=${limit}&fields=key,title,author_name,isbn,first_publish_year,number_of_pages_median,subject,cover_i,ratings_average,ratings_count,publisher`;
     }
 
     return this.makeRequest<OpenLibrarySearchResult>(url);
@@ -139,6 +182,9 @@ class OpenLibraryService {
       if (book.cover_i) {
         return this.getCoverUrl(book.cover_i, "L");
       }
+      if (book.cover_id) {
+        return this.getCoverUrl(book.cover_id, "L");
+      }
       if (book.covers && book.covers.length > 0) {
         return this.getCoverUrl(book.covers[0], "L");
       }
@@ -148,26 +194,46 @@ class OpenLibraryService {
       return "";
     };
 
+    const getAuthors = (book: any): string[] => {
+      if (book.author_name) {
+        return book.author_name;
+      }
+      if (book.authors) {
+        return book.authors.map((a: any) => a.name);
+      }
+      return [];
+    };
+
+    const getTitle = (book: any): string => {
+      return book.title || "";
+    };
+
+    const getPublishYear = (book: any): number | undefined => {
+      return book.first_publish_year;
+    };
+
+    const getKey = (book: any): string => {
+      return book.key || "";
+    };
+
     return {
-      openLibraryId: olBook.key,
-      title: olBook.title || "",
-      authors:
-        olBook.author_name ||
-        (olBook.authors ? olBook.authors.map((a: any) => a.name) : []),
+      openLibraryId: getKey(olBook),
+      title: getTitle(olBook),
+      authors: getAuthors(olBook),
       isbn: olBook.isbn ? olBook.isbn[0] : undefined,
       isbn13: olBook.isbn_13 ? olBook.isbn_13[0] : undefined,
       description: getDescription(olBook.description),
-      publishedDate: olBook.first_publish_year
-        ? olBook.first_publish_year.toString()
-        : olBook.first_publish_date,
+      publishedDate: getPublishYear(olBook)
+        ? getPublishYear(olBook)!.toString()
+        : undefined,
       pageCount: olBook.number_of_pages_median || olBook.number_of_pages,
-      categories: olBook.subject ? olBook.subject.slice(0, 5) : [], // Limit to 5 categories
+      categories: olBook.subject ? olBook.subject.slice(0, 5) : [],
       imageUrl: getCoverUrl(olBook),
       rating: olBook.ratings_average
         ? Math.round(olBook.ratings_average * 10) / 10
         : undefined,
       ratingsCount: olBook.ratings_count || 0,
-      price: price || Math.floor(Math.random() * 30) + 10, // Random price between $10-40
+      price: price || Math.floor(Math.random() * 30) + 10,
       availability: "available" as const,
     };
   }

@@ -9,34 +9,47 @@ const POPULAR_SUBJECTS = [
   "romance",
   "science fiction",
   "fantasy",
-  "biography",
-  "history",
-  "self-help",
-  "business",
-  "technology",
-  "health",
-  "cooking",
-  "art",
-  "philosophy",
-  "poetry",
-  "drama",
-  "children",
-  "young adult",
-  "comics",
-  "education",
 ];
 
-const BOOKS_PER_SUBJECT = 15;
-const DELAY_BETWEEN_REQUESTS = 2000; // 2 seconds to be respectful to the API
-const MIN_YEAR = 2015; // Only books from 2015 onwards
+const BOOKS_PER_SUBJECT = 5;
+const DELAY_BETWEEN_REQUESTS = 2000;
 
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function populateLatestBooks(): Promise<void> {
-  console.log("🚀 Starting LATEST book population from Open Library...");
-  console.log(`📅 Only fetching books from ${MIN_YEAR} onwards`);
+async function testOpenLibraryService() {
+  console.log("🧪 Testing Open Library service...");
+
+  try {
+    const testResults = await openLibraryService.searchBooks("harry potter", 3);
+    console.log("Open Library test results:", testResults);
+
+    if (!testResults || !testResults.docs || testResults.docs.length === 0) {
+      console.log("❌ Open Library service is not returning results");
+      return false;
+    }
+
+    console.log(
+      `✅ Open Library service is working. Found ${testResults.docs.length} books`
+    );
+    return true;
+  } catch (error) {
+    console.error("❌ Open Library service test failed:", error);
+    return false;
+  }
+}
+
+async function populateBooks(): Promise<void> {
+  console.log("🚀 Starting book population from Open Library...");
+
+  const isServiceWorking = await testOpenLibraryService();
+  if (!isServiceWorking) {
+    console.log(
+      "❌ Cannot proceed with Open Library seeding - service not working"
+    );
+    return;
+  }
 
   let totalImported = 0;
   const results: Array<{
@@ -56,18 +69,15 @@ async function populateLatestBooks(): Promise<void> {
     const uniqueBooks = new Set<string>();
 
     try {
-      // Keep fetching until we get 15 recent books or run out of pages
-      while (imported < BOOKS_PER_SUBJECT && attempts < 50) {
-        // Safety limit
+      while (imported < BOOKS_PER_SUBJECT && attempts < 3) {
         attempts++;
-        console.log(`   📄 Page ${page} for ${subject}...`);
+        console.log(`   📄 Attempt ${attempts} for ${subject}...`);
 
         try {
-          // Search for books in this subject, sorted by newest first
-          const searchResults = await openLibraryService.searchBySubject(
+          const searchResults = await openLibraryService.searchBooksBySubject(
             subject,
-            50, // Get more to filter for recent ones
-            (page - 1) * 50 // Calculate offset
+            20,
+            (page - 1) * 20
           );
 
           if (!searchResults.docs || searchResults.docs.length === 0) {
@@ -75,52 +85,44 @@ async function populateLatestBooks(): Promise<void> {
             break;
           }
 
-          console.log(
-            `   Found ${searchResults.docs.length} books on page ${page}`
-          );
+          console.log(`   Found ${searchResults.docs.length} books`);
+          console.log("   Sample books found:");
+          for (let i = 0; i < Math.min(3, searchResults.docs.length); i++) {
+            const book = searchResults.docs[i];
+            console.log(
+              `      - ${book.title} (${book.first_publish_year || "n/a"})`
+            );
+          }
 
-          let recentBooksCount = 0;
+          let addedThisRound = 0;
           for (const bookData of searchResults.docs) {
-            // Skip if we already have enough books
             if (imported >= BOOKS_PER_SUBJECT) break;
 
-            // Check if book is recent enough
-            const publishYear = bookData.first_publish_year;
-            if (!publishYear || publishYear < MIN_YEAR) {
-              continue; // Skip old books
-            }
-
-            // Check for duplicates
             const bookKey = bookData.key || bookData.isbn?.[0];
             if (!bookKey || uniqueBooks.has(bookKey)) {
               continue;
             }
 
             try {
-              // Transform to our format
               const transformedBook =
                 openLibraryService.transformToBook(bookData);
+              console.log(`   Transforming: ${transformedBook.title}`);
 
-              // Check if book already exists in database
               const existingBook = await Book.findOne({
-                where: {
-                  openLibraryId: transformedBook.openLibraryId,
-                },
+                where: { openLibraryId: transformedBook.openLibraryId },
               });
 
               if (!existingBook) {
-                // Create new book
                 await Book.create(transformedBook);
                 imported++;
                 totalImported++;
                 uniqueBooks.add(bookKey);
-                recentBooksCount++;
-
-                if (imported % 5 === 0) {
-                  console.log(
-                    `   ✅ Imported ${imported} recent books for ${subject}...`
-                  );
-                }
+                addedThisRound++;
+                console.log(`   ✅ Imported: ${transformedBook.title}`);
+              } else {
+                console.log(
+                  `   ⏭️  Skipped (exists): ${transformedBook.title}`
+                );
               }
             } catch (error) {
               errors++;
@@ -132,38 +134,31 @@ async function populateLatestBooks(): Promise<void> {
           }
 
           console.log(
-            `   📊 Page ${page}: ${recentBooksCount} recent books added`
+            `   📊 Attempt ${attempts}: ${addedThisRound} books added`
           );
 
-          // If we didn't find any recent books on this page, move to next
-          if (recentBooksCount === 0) {
-            console.log(
-              `   ⏩ No recent books on page ${page}, moving to next...`
-            );
+          if (addedThisRound === 0) {
+            console.log(`   ⏩ No new books found, moving to next subject...`);
+            break;
           }
 
           page++;
-
-          // Small delay between pages
-          await delay(500);
+          await delay(1000);
         } catch (pageError) {
           errors++;
           console.error(
-            `   ❌ Error on page ${page}:`,
+            `   ❌ Error on attempt ${attempts}:`,
             pageError instanceof Error ? pageError.message : String(pageError)
           );
-          // Wait longer before retrying
-          await delay(5000);
-          break;
+          await delay(3000);
         }
       }
 
       results.push({ subject, imported, errors, attempts });
       console.log(
-        `   ✅ Completed ${subject}: ${imported} imported, ${errors} errors (${attempts} pages)`
+        `   ✅ Completed ${subject}: ${imported} imported, ${errors} errors (${attempts} attempts)`
       );
 
-      // Delay between subjects to be respectful to the API
       if (subject !== POPULAR_SUBJECTS[POPULAR_SUBJECTS.length - 1]) {
         console.log(
           `   ⏳ Waiting ${DELAY_BETWEEN_REQUESTS}ms before next subject...`
@@ -180,19 +175,17 @@ async function populateLatestBooks(): Promise<void> {
     }
   }
 
-  // Print summary
-  console.log("\n📊 LATEST BOOKS IMPORT SUMMARY");
-  console.log("=============================");
+  console.log("\n📊 BOOKS IMPORT SUMMARY");
+  console.log("======================");
   console.log(`Total books imported: ${totalImported}`);
   console.log(`Subjects processed: ${POPULAR_SUBJECTS.length}`);
-  console.log(`Minimum year: ${MIN_YEAR}`);
   console.log("\nDetailed results:");
 
   results.forEach((result) => {
     console.log(
       `  ${result.subject.padEnd(15)} | Imported: ${result.imported
         .toString()
-        .padStart(3)} | Errors: ${result.errors} | Pages: ${result.attempts}`
+        .padStart(3)} | Errors: ${result.errors} | Attempts: ${result.attempts}`
     );
   });
 
@@ -200,27 +193,29 @@ async function populateLatestBooks(): Promise<void> {
   console.log(`\nTotal errors: ${totalErrors}`);
 
   if (totalImported > 0) {
-    console.log("\n🎉 Latest book population completed successfully!");
+    console.log("\n🎉 Book population completed successfully!");
   } else {
-    console.log("\n⚠️  No recent books were imported. You may need to:");
-    console.log("   - Decrease MIN_YEAR (currently " + MIN_YEAR + ")");
-    console.log("   - Check your internet connection");
-    console.log("   - Verify Open Library API is accessible");
+    console.log("\n⚠️  No books were imported from Open Library.");
   }
 }
 
 async function main(): Promise<void> {
   try {
     console.log("📊 Starting database seeding...");
-
-    // Initialize database connection
     await initializeDatabase();
     console.log("✅ Database connected successfully");
 
-    // Run the population script
-    await populateLatestBooks();
+    await populateBooks();
 
-    console.log("🎉 Database seeding completed!");
+    const finalCount = await Book.count();
+    console.log(`\n🎯 Final book count: ${finalCount}`);
+
+    if (finalCount > 0) {
+      console.log("🎉 Database seeding completed successfully!");
+    } else {
+      console.log("❌ Database seeding failed - no books were added");
+    }
+
     process.exit(0);
   } catch (error) {
     console.error("❌ Database seeding failed:", error);
@@ -228,13 +223,11 @@ async function main(): Promise<void> {
   }
 }
 
-// Add a timeout to prevent the script from running indefinitely
 const scriptTimeout = setTimeout(() => {
   console.error("❌ Script timed out after 30 minutes");
   process.exit(1);
-}, 30 * 60 * 1000); // 30 minutes
+}, 30 * 60 * 1000);
 
-// Run the main function
 main()
   .then(() => {
     clearTimeout(scriptTimeout);
