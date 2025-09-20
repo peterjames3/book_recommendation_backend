@@ -9,7 +9,8 @@ if (!process.env.JWT_SECRET) {
 
 // Store the secret in a constant
 const JWT_SECRET = process.env.JWT_SECRET as string;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN ||
+  "7d") as jwt.SignOptions["expiresIn"];
 
 export interface AuthRequest extends Request {
   user?: User;
@@ -88,11 +89,12 @@ export const optionalAuth = async (
 
 export const generateToken = (userId: string): string => {
   const options: SignOptions = {
-    expiresIn: Number(JWT_EXPIRES_IN),
+    expiresIn: JWT_EXPIRES_IN, // keep as string (e.g., "7d", "1h")
   };
 
   return jwt.sign({ userId }, JWT_SECRET, options);
 };
+
 // export const generateToken = (userId: string): string => {
 //   return jwt.sign({ userId }, JWT_SECRET, {
 //     expiresIn: JWT_EXPIRES_IN,
