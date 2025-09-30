@@ -72,9 +72,9 @@ router.post(
             );
 
             // Transform results to our format
-            const transformedBooks: any[] = searchResults.docs.map((book: any) =>
+            const transformedBooks: any[] = await Promise.all(searchResults.docs.map((book: any) =>
                 openLibraryService.transformToBook(book)
-            );
+            ));
 
             let savedBooks: any[] = [];
 
@@ -138,15 +138,15 @@ router.get("/subject/:subject", async (req, res) => {
     const { subject } = req.params;
     const { limit = 20, offset = 0, saveToDatabase = false } = req.query;
 
-    const searchResults = await openLibraryService.searchBySubject(
+    const searchResults = await openLibraryService.searchBooksBySubject(
       subject,
       Number(limit),
       Number(offset)
     );
 
-    const transformedBooks = searchResults.docs.map((book) =>
+    const transformedBooks = await Promise.all(searchResults.docs.map((book) =>
       openLibraryService.transformToBook(book)
-    );
+    ));
 
     let savedBooks = [];
 
@@ -209,9 +209,9 @@ router.get("/popular", async (req, res) => {
       Number(limit)
     );
 
-    const transformedBooks = searchResults.docs.map((book) =>
+    const transformedBooks = await Promise.all(searchResults.docs.map((book) =>
       openLibraryService.transformToBook(book)
-    );
+    ));
 
     let savedBooks = [];
 
@@ -266,9 +266,9 @@ router.get("/popular/:subject", async (req, res) => {
       Number(limit)
     );
 
-    const transformedBooks = searchResults.docs.map((book) =>
+    const transformedBooks = await Promise.all(searchResults.docs.map((book) =>
       openLibraryService.transformToBook(book)
-    );
+    ));
 
     let savedBooks = [];
 
@@ -319,7 +319,7 @@ router.get("/book/:key", async (req, res) => {
     const { saveToDatabase = false } = req.query;
 
     const bookData = await openLibraryService.getBookByKey(key);
-    const transformedBook = openLibraryService.transformToBook(bookData);
+    const transformedBook = await openLibraryService.transformToBook(bookData);
 
     let savedBook = null;
 
