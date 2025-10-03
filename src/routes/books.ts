@@ -3,6 +3,7 @@ import { Op } from "sequelize";
 import { Book } from "../models/Book.ts";
 import { optionalAuth, AuthRequest } from "../middleware/auth.ts";
 import llmService from "../services/llmServices.ts";
+import openLibraryService from "../services/openLibraryService.ts";
 
 const router = express.Router();
 
@@ -87,6 +88,47 @@ router.get("/", optionalAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// Enhanced search with Open Library integration
+router.get("/search/enhanced", async (req: AuthRequest, res) => {
+  try {
+    const { q, limit = 20, includeDescriptions = "true" } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        message: "Query parameter 'q' is required",
+      });
+    }
+
+    let books;
+    if (includeDescriptions === "true") {
+      books = await openLibraryService.searchBooksWithDescriptions(
+        q as string,
+        Number(limit)
+      );
+    } else {
+      const searchResult = await openLibraryService.searchBooks(
+        q as string,
+        Number(limit)
+      );
+      books = searchResult.docs.map((doc) =>
+        openLibraryService.transformToBook(doc)
+      );
+    }
+
+    res.json({
+      success: true,
+      data: books,
+    });
+  } catch (error) {
+    console.error("Enhanced search error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to search books",
+    });
+  }
+});
+
 // Get book by ID
 router.get("/:id", optionalAuth, async (req: AuthRequest, res) => {
   try {
@@ -116,6 +158,45 @@ router.get("/:id", optionalAuth, async (req: AuthRequest, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch book",
+    });
+  }
+});
+
+// Get book description from Open Library
+router.get("/:id/description", async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+
+    // If it's an Open Library ID
+    if (id.startsWith("OL") || id.startsWith("/works/")) {
+      const description = await openLibraryService.getBookDescription(id);
+      return res.json({
+        success: true,
+        data: { description },
+      });
+    }
+
+    // If it's our internal ID, get the Open Library ID first
+    const book = await Book.findByPk(id);
+    if (!book || !book.openLibraryId) {
+      return res.status(404).json({
+        success: false,
+        message: "Book not found or no Open Library ID available",
+      });
+    }
+
+    const description = await openLibraryService.getBookDescription(
+      book.openLibraryId
+    );
+    res.json({
+      success: true,
+      data: { description },
+    });
+  } catch (error) {
+    console.error("Get book description error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch book description",
     });
   }
 });

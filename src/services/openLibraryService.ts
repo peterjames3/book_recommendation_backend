@@ -15,7 +15,7 @@ export interface OpenLibraryBook {
   publish_date?: string;
   number_of_pages?: number;
   subjects?: string[];
-  description?: string | { value: string };
+  description?: string | { value: string } | { type: string; value: string };
   covers?: number[];
   publishers?: string[];
   first_publish_date?: string;
@@ -127,13 +127,23 @@ class OpenLibraryService {
     const cleanKey = key.startsWith("/works/") ? key : `/works/${key}`;
     const url = `${OPEN_LIBRARY_BASE_URL}${cleanKey}.json`;
 
-    return this.makeRequest<OpenLibraryBook>(url);
+    const book = await this.makeRequest<OpenLibraryBook>(url);
+
+    // Debug description format
+    this.debugDescription(book.description, cleanKey);
+
+    return book;
   }
 
   async getBookByISBN(isbn: string): Promise<OpenLibraryBook> {
     const url = `${OPEN_LIBRARY_BASE_URL}/isbn/${isbn}.json`;
 
-    return this.makeRequest<OpenLibraryBook>(url);
+    const book = await this.makeRequest<OpenLibraryBook>(url);
+
+    // Debug description format
+    this.debugDescription(book.description, `ISBN:${isbn}`);
+
+    return book;
   }
 
   getCoverUrl(coverId: number, size: "S" | "M" | "L" = "M"): string {
@@ -170,12 +180,110 @@ class OpenLibraryService {
     return this.makeRequest<OpenLibrarySearchResult>(url);
   }
 
+  // Enhanced description handling methods
+  async getBookDescription(workKey: string): Promise<string> {
+    try {
+      const cleanKey = workKey.startsWith("/works/")
+        ? workKey
+        : `/works/${workKey}`;
+      const url = `${OPEN_LIBRARY_BASE_URL}${cleanKey}.json`;
+      const response = await axios.get(url);
+
+      const description = response.data.description;
+      return this.extractDescription(description);
+    } catch (error) {
+      console.error(`Failed to fetch description for ${workKey}:`, error);
+      return "No description available";
+    }
+  }
+
+  private extractDescription(desc: any): string {
+    if (!desc) return "No description available";
+
+    if (typeof desc === "string") {
+      return desc.replace(/<\/?[^>]+(>|$)/g, "").trim();
+    }
+
+    if (typeof desc === "object") {
+      if (desc.value) return desc.value;
+      if (desc.type === "/type/text" && desc.value) return desc.value;
+      if (typeof desc === "object" && !Array.isArray(desc)) {
+        // Try to find any string value in the object
+        for (const key in desc) {
+          if (typeof desc[key] === "string" && desc[key].length > 10) {
+            return desc[key];
+          }
+        }
+      }
+    }
+
+    return "No description available";
+  }
+
+  // Enhanced search with descriptions
+  async searchBooksWithDescriptions(
+    query: string,
+    limit: number = 20,
+    offset: number = 0
+  ): Promise<any[]> {
+    const searchResult = await this.searchBooks(query, limit, offset);
+
+    // Fetch detailed information for each book to get descriptions
+    const booksWithDescriptions = await Promise.all(
+      searchResult.docs.map(async (doc) => {
+        try {
+          const fullBook = await this.getBookByKey(doc.key);
+          return this.transformToBook({
+            ...doc,
+            description: fullBook.description || "No description available",
+          });
+        } catch (error) {
+          console.error(`Failed to fetch details for ${doc.key}:`, error);
+          return this.transformToBook(doc);
+        }
+      })
+    );
+
+    return booksWithDescriptions;
+  }
+
+  // Alternative description sources
+  async getBookDescriptionFromISBN(isbn: string): Promise<string> {
+    try {
+      // Try Google Books API as fallback
+      const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`;
+      const response = await axios.get(googleBooksUrl);
+
+      if (response.data.items && response.data.items.length > 0) {
+        const description = response.data.items[0].volumeInfo.description;
+        return description || "No description available";
+      }
+    } catch (error) {
+      console.error(
+        `Failed to fetch description from Google Books for ISBN ${isbn}:`,
+        error
+      );
+    }
+
+    return "No description available";
+  }
+
+  // Debugging helper
+  private debugDescription(desc: any, key: string): void {
+    console.log(`🔍 Description debug for ${key}:`);
+    console.log(`   Type: ${typeof desc}`);
+    console.log(`   Value:`, desc);
+
+    if (desc && typeof desc === "object") {
+      console.log(`   Object keys: ${Object.keys(desc).join(", ")}`);
+      console.log(`   Is array: ${Array.isArray(desc)}`);
+    }
+  }
+
   // Transform Open Library data to our Book format
   transformToBook(olBook: any, price?: number): any {
     const getDescription = (desc: any): string => {
-      if (typeof desc === "string") return desc;
-      if (desc && typeof desc === "object" && desc.value) return desc.value;
-      return "";
+      return this.extractDescription(desc);
     };
 
     const getCoverUrl = (book: any): string => {
@@ -205,7 +313,7 @@ class OpenLibraryService {
     };
 
     const getTitle = (book: any): string => {
-      return book.title || "";
+      return book.title || "Unknown Title";
     };
 
     const getPublishYear = (book: any): number | undefined => {
