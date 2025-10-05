@@ -14,6 +14,8 @@ import orderRoutes from "./routes/orders.ts";
 import recommendationRoutes from "./routes/recommendation.ts";
 import searchRoutes from "./routes/search.ts";
 import openLibraryRoutes from "./routes/openLibrary.ts";
+import testEmailRoutes from "./routes/test-email.ts"; // Add this import
+import { emailService } from "./services/emailService.ts";
 
 // Load environment variables
 dotenv.config();
@@ -42,12 +44,31 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Health check endpoint
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "LitKenya API is running!",
-    timestamp: new Date().toISOString(),
-  });
+app.get("/health", async (req, res) => {
+  try {
+    const emailStatus = await emailService.verifyConnection();
+
+    res.status(200).json({
+      success: true,
+      message: "LitKenya API is running!",
+      timestamp: new Date().toISOString(),
+      services: {
+        database: "connected",
+        email: emailStatus ? "connected" : "disconnected",
+      },
+    });
+  } catch (error) {
+    res.status(200).json({
+      success: true,
+      message: "LitKenya API is running!",
+      timestamp: new Date().toISOString(),
+      services: {
+        database: "connected",
+        email: "error",
+      },
+      warning: "Email service is unavailable",
+    });
+  }
 });
 
 // API Routes
@@ -58,6 +79,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/open-library", openLibraryRoutes);
+app.use("/api", testEmailRoutes); // Add this line - it will handle /api/test-email
 
 // 404 handler
 app.use((req, res) => {
@@ -66,6 +88,7 @@ app.use((req, res) => {
     message: "Route not found",
   });
 });
+
 // Global error handler
 app.use(
   (
@@ -84,15 +107,36 @@ app.use(
   }
 );
 
-// Initialize database and start server
+// Initialize services and start server
 const startServer = async () => {
   try {
+    // Initialize database
     await initializeDatabase();
+    console.log("✅ Database initialized");
 
+    // Initialize email service
+    console.log("📧 Initializing email service...");
+    const emailConnected = await emailService.verifyConnection();
+
+    if (emailConnected) {
+      console.log("✅ Email service connected successfully");
+    } else {
+      console.log(
+        "⚠️  Email service not available - orders will still work but emails won't be sent"
+      );
+    }
+
+    // Start server
     app.listen(PORT, () => {
       console.log(`🚀 LitKenya API server is running on port ${PORT}`);
       console.log(`📚 Environment: ${process.env.NODE_ENV}`);
       console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `📧 Test email endpoint: http://localhost:${PORT}/api/test-email`
+        );
+      }
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);

@@ -1,3 +1,4 @@
+// models/Order.ts
 import {
   Table,
   Column,
@@ -18,7 +19,7 @@ import { OrderItem } from "./Orderitem.ts";
 export interface Address {
   street: string;
   city: string;
-  state: string;
+  town: string;
   zipCode: string;
   country: string;
 }
@@ -85,6 +86,26 @@ export class Order extends Model {
     allowNull: true,
   })
   notes?: string;
+
+  // Add customer email field
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    validate: {
+      isEmail: true,
+    },
+  })
+  customerEmail!: string;
+
+  // Add customer phone field
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+    },
+  })
+  customerPhone!: string;
 
   @CreatedAt
   createdAt!: Date;
