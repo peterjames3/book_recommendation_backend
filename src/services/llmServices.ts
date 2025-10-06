@@ -1,10 +1,9 @@
-import OpenAI from "openai";
+// services/llmService.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Book } from "../models/Book.ts";
 import { User } from "../models/User.ts";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export interface BookRecommendation {
   book: Book;
@@ -20,8 +19,42 @@ export interface SearchQuery {
 }
 
 class LLMService {
+  private model: any;
+
+  constructor() {
+    this.model = genAI.getGenerativeModel({
+      model: "gemini-pro",
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 1000,
+      },
+    });
+  }
+
+  private async generateContent(
+    prompt: string,
+    systemInstruction?: string
+  ): Promise<string> {
+    try {
+      // Gemini doesn't have a system message like OpenAI, so we prepend it
+      const fullPrompt = systemInstruction
+        ? `${systemInstruction}\n\n${prompt}`
+        : prompt;
+
+      const result = await this.model.generateContent(fullPrompt);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      console.error("Gemini API error:", error);
+      throw error;
+    }
+  }
+
   async parseNaturalLanguageQuery(query: string): Promise<SearchQuery> {
     try {
+      const systemInstruction =
+        "You are a book search assistant. Analyze user queries and extract relevant search information. Always respond with valid JSON.";
+
       const prompt = `
         Analyze this book search query and extract useful information for searching a book database:
         
@@ -38,31 +71,15 @@ class LLMService {
           "suggestedGenres": ["Mystery", "Crime", "Thriller"],
           "searchTerms": ["mystery detective", "crime thriller", "detective story"]
         }
+
+        Respond only with valid JSON, no additional text.
       `;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a book search assistant. Analyze user queries and extract relevant search information. Always respond with valid JSON.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 300,
-      });
+      const content = await this.generateContent(prompt, systemInstruction);
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("No response from OpenAI");
-      }
-
-      const parsed = JSON.parse(content);
+      // Clean the response (Gemini might add markdown formatting)
+      const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
+      const parsed = JSON.parse(cleanContent);
 
       return {
         originalQuery: query,
@@ -102,6 +119,9 @@ class LLMService {
         rating: book.rating,
       }));
 
+      const systemInstruction =
+        "You are a book recommendation expert. Analyze user preferences and recommend books with detailed reasoning. Always respond with valid JSON.";
+
       const prompt = `
         Based on this user's preferences, recommend books from the available list:
         
@@ -126,31 +146,15 @@ class LLMService {
         ]
         
         Provide up to ${limit} recommendations, scored from 0-1 based on relevance to user preferences.
+        
+        Respond only with valid JSON, no additional text.
       `;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a book recommendation expert. Analyze user preferences and recommend books with detailed reasoning. Always respond with valid JSON.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.4,
-        max_tokens: 1000,
-      });
+      const content = await this.generateContent(prompt, systemInstruction);
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("No response from OpenAI");
-      }
-
-      const recommendations = JSON.parse(content);
+      // Clean the response
+      const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
+      const recommendations = JSON.parse(cleanContent);
 
       // Map recommendations to books and return
       const result: BookRecommendation[] = [];
@@ -204,6 +208,9 @@ class LLMService {
         )} - A ${book.categories.join(", ")} book.`;
       }
 
+      const systemInstruction =
+        "You are a book reviewer who writes compelling, concise summaries that help readers discover great books.";
+
       const prompt = `
         Create a compelling, concise summary for this book:
         
@@ -213,29 +220,12 @@ class LLMService {
         Description: ${book.description}
         
         Write a 2-3 sentence engaging summary that would help someone decide if they want to read this book.
+        
+        Respond with just the summary text, no additional formatting.
       `;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a book reviewer who writes compelling, concise summaries that help readers discover great books.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.6,
-        max_tokens: 150,
-      });
-
-      return (
-        response.choices[0]?.message?.content ||
-        book.description.substring(0, 200) + "..."
-      );
+      const content = await this.generateContent(prompt, systemInstruction);
+      return content.trim();
     } catch (error) {
       console.error("LLM summary generation error:", error);
       return (
@@ -262,6 +252,9 @@ class LLMService {
           description: b.description?.substring(0, 150) || "",
         }));
 
+      const systemInstruction =
+        "You are a book similarity expert. Find books that readers would enjoy if they liked the target book. Always respond with valid JSON.";
+
       const prompt = `
         Find books similar to this target book:
         
@@ -280,31 +273,16 @@ class LLMService {
         ["book-id-1", "book-id-2", "book-id-3"]
         
         Consider genre, themes, writing style, and subject matter. Return up to ${limit} book IDs.
+        
+        Respond only with valid JSON, no additional text.
       `;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a book similarity expert. Find books that readers would enjoy if they liked the target book. Always respond with valid JSON.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 200,
-      });
+      const content = await this.generateContent(prompt, systemInstruction);
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("No response from OpenAI");
-      }
+      // Clean the response
+      const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
+      const similarBookIds = JSON.parse(cleanContent);
 
-      const similarBookIds = JSON.parse(content);
       const similarBooks: Book[] = [];
 
       for (const bookId of similarBookIds) {
@@ -326,6 +304,63 @@ class LLMService {
             b.categories.some((cat) => book.categories.includes(cat))
         )
         .slice(0, limit);
+    }
+  }
+
+  // Additional method for Gemini-specific features
+  async analyzeReadingTaste(
+    user: User,
+    readingHistory: Book[]
+  ): Promise<{ insights: string; suggestedGenres: string[] }> {
+    try {
+      const systemInstruction =
+        "You are a literary analyst who provides insights about reading preferences and suggests new genres to explore.";
+
+      const prompt = `
+        Analyze this user's reading taste based on their reading history:
+        
+        User Preferences:
+        - Favorite Genres: ${
+          user.preferences?.favoriteGenres?.join(", ") || "None"
+        }
+        - Preferred Authors: ${
+          user.preferences?.preferredAuthors?.join(", ") || "None"
+        }
+        
+        Reading History (${readingHistory.length} books):
+        ${readingHistory
+          .slice(0, 10)
+          .map(
+            (book) =>
+              `- "${book.title}" by ${book.authors.join(
+                ", "
+              )} (${book.categories.join(", ")})`
+          )
+          .join("\n")}
+        
+        Provide a JSON response with:
+        {
+          "insights": "2-3 sentences about their reading patterns and preferences",
+          "suggestedGenres": ["array of 3-5 genres they might enjoy exploring"]
+        }
+        
+        Respond only with valid JSON, no additional text.
+      `;
+
+      const content = await this.generateContent(prompt, systemInstruction);
+      const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
+      return JSON.parse(cleanContent);
+    } catch (error) {
+      console.error("LLM reading taste analysis error:", error);
+      return {
+        insights:
+          "Based on your reading history, you enjoy diverse books across multiple genres.",
+        suggestedGenres: [
+          "Contemporary Fiction",
+          "Historical Fiction",
+          "Biography",
+        ],
+      };
     }
   }
 }
