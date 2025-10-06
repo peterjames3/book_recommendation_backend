@@ -7,6 +7,7 @@ import { Book } from "../models/Book.ts";
 import { authenticateToken, AuthRequest } from "../middleware/auth.ts";
 import { body, validationResult } from "express-validator";
 import sequelize from "../config/database.ts";
+import { emailService } from "../services/emailService.ts";
 
 const router = express.Router();
 
@@ -70,6 +71,12 @@ router.post(
     const transaction = await sequelize.transaction();
 
     try {
+      // ADD THIS LOGGING to see what's actually being received
+      console.log(
+        "📨 Received order request body:",
+        JSON.stringify(req.body, null, 2)
+      );
+      console.log("👤 User ID:", req.userId);
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         await transaction.rollback();
@@ -221,7 +228,7 @@ async function sendCustomerOrderConfirmation(order: any) {
   });
 
   // TODO: Integrate with your email service (Nodemailer, SendGrid, etc.)
-  // await emailService.sendCustomerConfirmation(order);
+  await emailService.sendOrderConfirmation(order);
 }
 
 async function sendAdminOrderNotification(order: any) {
@@ -230,7 +237,7 @@ async function sendAdminOrderNotification(order: any) {
   console.log("Customer:", order.customerEmail, order.customerPhone);
 
   // TODO: Integrate with your email service
-  // await emailService.sendAdminNotification(order);
+  await emailService.sendAdminNotification(order);
 }
 
 // ... rest of your existing routes remain the same
