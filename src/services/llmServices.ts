@@ -381,6 +381,158 @@ class LLMService {
       );
     }
   }
+
+  async findSimilarBooks(
+    targetBook: Book,
+    availableBooks: Book[],
+    limit: number = 5
+  ): Promise<BookRecommendation[]> {
+    try {
+      // Prepare book data for the prompt
+      const booksData = availableBooks.slice(0, 30).map((book) => ({
+        id: book.id,
+        title: book.title,
+        authors: book.authors,
+        categories: book.categories,
+        description: book.description?.substring(0, 150) || "",
+        rating: book.rating || 0,
+      }));
+
+      const prompt = `
+      You are a book recommendation expert. Find books similar to the target book based on genre, themes, writing style, and content.
+
+      TARGET BOOK:
+      - Title: ${targetBook.title}
+      - Authors: ${targetBook.authors.join(", ")}
+      - Categories: ${targetBook.categories.join(", ")}
+      - Description: ${targetBook.description?.substring(0, 200) || "No description available"}
+
+      AVAILABLE BOOKS TO CHOOSE FROM:
+      ${JSON.stringify(booksData, null, 2)}
+
+      Find the most similar books and provide recommendations as a JSON array with this exact format:
+      [
+        {
+          "bookId": "exact-book-id-from-list",
+          "score": 0.95,
+          "reason": "Detailed explanation of why this book is similar to the target book"
+        }
+      ]
+
+      Guidelines:
+      - Score should be between 0.6 and 1.0 (only recommend truly similar books)
+      - Only recommend books from the available list
+      - Focus on genre, themes, writing style, and content similarities
+      - Consider author style if relevant
+      - Return maximum ${limit} recommendations
+      - Order by similarity score (highest first)
+
+      Respond with ONLY the JSON array, no additional text.
+      `;
+
+      const content = await this.generateContent(prompt);
+      const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
+      const recommendations = JSON.parse(cleanContent);
+
+      const result: BookRecommendation[] = [];
+
+      for (const rec of recommendations.slice(0, limit)) {
+        const book = availableBooks.find((b) => b.id === rec.bookId);
+        if (book) {
+          result.push({
+            book,
+            score: Math.min(Math.max(rec.score || 0.6, 0), 1),
+            reason: rec.reason || "Similar themes and genre",
+          });
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error("LLM similar books error:", error);
+      return this.fallbackSimilarBooks(targetBook, availableBooks, limit);
+    }
+  }
+
+  private fallbackSimilarBooks(
+    targetBook: Book,
+    availableBooks: Book[],
+    limit: number = 5
+  ): BookRecommendation[] {
+    const scoredBooks = availableBooks.map((book) => {
+      let score = 0.1; // Base score
+
+      // Genre matching (most important)
+      const genreMatches = book.categories.filter((cat) =>
+        targetBook.categories.some((targetCat) =>
+          cat.toLowerCase().includes(targetCat.toLowerCase()) ||
+          targetCat.toLowerCase().includes(cat.toLowerCase())
+        )
+      );
+      score += genreMatches.length * 0.3;
+
+      // Author matching
+      const authorMatches = book.authors.filter((author) =>
+        targetBook.authors.some((targetAuthor) =>
+          author.toLowerCase().includes(targetAuthor.toLowerCase()) ||
+          targetAuthor.toLowerCase().includes(author.toLowerCase())
+        )
+      );
+      score += authorMatches.length * 0.2;
+
+      // Description similarity (basic keyword matching)
+      if (book.description && targetBook.description) {
+        const bookWords = book.description.toLowerCase().split(/\s+/);
+        const targetWords = targetBook.description.toLowerCase().split(/\s+/);
+        const commonWords = bookWords.filter((word) =>
+          targetWords.includes(word) && word.length > 3
+        );
+        score += Math.min(commonWords.length * 0.05, 0.2);
+      }
+
+      // Rating similarity bonus
+      if (book.rating && targetBook.rating) {
+        const ratingDiff = Math.abs(book.rating - targetBook.rating);
+        if (ratingDiff < 0.5) score += 0.1;
+      }
+
+      return { book, score };
+    });
+
+    return scoredBooks
+      .filter(({ score }) => score > 0.3) // Only return reasonably similar books
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ book, score }) => ({
+        book,
+        score,
+        reason: this.generateSimilarityReason(book, targetBook),
+      }));
+  }
+
+  private generateSimilarityReason(book: Book, targetBook: Book): string {
+    const genreMatches = book.categories.filter((cat) =>
+      targetBook.categories.some((targetCat) =>
+        cat.toLowerCase().includes(targetCat.toLowerCase())
+      )
+    );
+
+    const authorMatches = book.authors.filter((author) =>
+      targetBook.authors.some((targetAuthor) =>
+        author.toLowerCase().includes(targetAuthor.toLowerCase())
+      )
+    );
+
+    if (genreMatches.length > 0 && authorMatches.length > 0) {
+      return `Similar genre (${genreMatches.join(", ")}) and author style`;
+    } else if (genreMatches.length > 0) {
+      return `Similar genre: ${genreMatches.join(", ")}`;
+    } else if (authorMatches.length > 0) {
+      return `Same author or similar writing style`;
+    } else {
+      return "Similar themes and content";
+    }
+  }
 }
 
 export default new LLMService();
