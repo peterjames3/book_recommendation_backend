@@ -1,9 +1,9 @@
 // services/llmService.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Book } from "../models/Book.ts";
-import { User } from "../models/User.ts";
+import { Book } from "../models/Book";
+import { User } from "../models/User";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export interface BookRecommendation {
   book: Book;
@@ -22,29 +22,23 @@ class LLMService {
   private model: any;
 
   constructor() {
+    // Use the working model from your test
     this.model = genAI.getGenerativeModel({
-      model: "gemini-pro",
+      model: "gemini-1.5-flash", // Use the same model that worked in your test
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: 1000,
       },
     });
+    console.log("✅ LLM Service initialized with gemini-1.5-flash");
   }
 
-  private async generateContent(
-    prompt: string,
-    systemInstruction?: string
-  ): Promise<string> {
+  private async generateContent(prompt: string): Promise<string> {
     try {
-      // Gemini doesn't have a system message like OpenAI, so we prepend it
-      const fullPrompt = systemInstruction
-        ? `${systemInstruction}\n\n${prompt}`
-        : prompt;
-
-      const result = await this.model.generateContent(fullPrompt);
+      const result = await this.model.generateContent(prompt);
       const response = await result.response;
       return response.text();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gemini API error:", error);
       throw error;
     }
@@ -52,32 +46,36 @@ class LLMService {
 
   async parseNaturalLanguageQuery(query: string): Promise<SearchQuery> {
     try {
-      const systemInstruction =
-        "You are a book search assistant. Analyze user queries and extract relevant search information. Always respond with valid JSON.";
-
       const prompt = `
-        Analyze this book search query and extract useful information for searching a book database:
-        
-        Query: "${query}"
-        
-        Please provide a JSON response with:
-        1. extractedKeywords: Important keywords from the query
-        2. suggestedGenres: Likely book genres based on the query
-        3. searchTerms: Optimized search terms for book database search
-        
-        Example response:
-        {
-          "extractedKeywords": ["mystery", "detective", "crime"],
-          "suggestedGenres": ["Mystery", "Crime", "Thriller"],
-          "searchTerms": ["mystery detective", "crime thriller", "detective story"]
-        }
+      You are a book search expert. Analyze the user's book search query and extract structured information for database search.
 
-        Respond only with valid JSON, no additional text.
+      QUERY: "${query}"
+
+      Extract and return as valid JSON:
+      {
+        "extractedKeywords": ["keyword1", "keyword2", ...],
+        "suggestedGenres": ["Genre1", "Genre2", ...],
+        "searchTerms": ["search term 1", "search term 2", ...]
+      }
+
+      Guidelines:
+      - extractedKeywords: Important nouns, themes, or specific terms from the query
+      - suggestedGenres: Likely book genres/categories (e.g., Fantasy, Mystery, Romance, Science Fiction)
+      - searchTerms: Optimized phrases for book database search
+
+      Example for "fantasy books with dragons and magic":
+      {
+        "extractedKeywords": ["fantasy", "dragons", "magic", "wizards"],
+        "suggestedGenres": ["Fantasy", "Young Adult", "Epic Fantasy"],
+        "searchTerms": ["fantasy dragons", "magic fantasy", "epic fantasy with dragons"]
+      }
+
+      Respond with ONLY the JSON object, no additional text.
       `;
 
-      const content = await this.generateContent(prompt, systemInstruction);
+      const content = await this.generateContent(prompt);
 
-      // Clean the response (Gemini might add markdown formatting)
+      // Clean the response and parse JSON
       const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
       const parsed = JSON.parse(cleanContent);
 
@@ -89,14 +87,116 @@ class LLMService {
       };
     } catch (error) {
       console.error("LLM query parsing error:", error);
-      // Fallback to simple keyword extraction
-      return {
-        originalQuery: query,
-        extractedKeywords: query.split(" ").filter((word) => word.length > 2),
-        suggestedGenres: [],
-        searchTerms: [query],
-      };
+      // Fallback to simple parsing
+      return this.fallbackQueryParse(query);
     }
+  }
+
+  private fallbackQueryParse(query: string): SearchQuery {
+    console.log("Using fallback query parsing");
+
+    const stopWords = new Set([
+      "the",
+      "a",
+      "an",
+      "and",
+      "or",
+      "but",
+      "in",
+      "on",
+      "at",
+      "to",
+      "for",
+      "of",
+      "with",
+      "by",
+      "about",
+    ]);
+    const keywords = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => word.length > 2 && !stopWords.has(word))
+      .slice(0, 10);
+
+    const genreMap: { [key: string]: string[] } = {
+      fantasy: [
+        "fantasy",
+        "magic",
+        "dragon",
+        "wizard",
+        "elf",
+        "orc",
+        "kingdom",
+        "mythical",
+      ],
+      mystery: [
+        "mystery",
+        "crime",
+        "detective",
+        "thriller",
+        "suspense",
+        "murder",
+        "investigation",
+      ],
+      romance: [
+        "romance",
+        "love",
+        "relationship",
+        "dating",
+        "marriage",
+        "heart",
+        "passion",
+      ],
+      scifi: [
+        "sci-fi",
+        "science fiction",
+        "space",
+        "alien",
+        "future",
+        "robot",
+        "technology",
+        "galaxy",
+      ],
+      horror: [
+        "horror",
+        "scary",
+        "ghost",
+        "supernatural",
+        "zombie",
+        "vampire",
+        "haunted",
+      ],
+      historical: [
+        "historical",
+        "history",
+        "period",
+        "ancient",
+        "medieval",
+        "victorian",
+        "world war",
+      ],
+      biography: [
+        "biography",
+        "memoir",
+        "autobiography",
+        "life story",
+        "true story",
+      ],
+    };
+
+    const detectedGenres: string[] = [];
+    for (const [genre, terms] of Object.entries(genreMap)) {
+      if (terms.some((term) => query.toLowerCase().includes(term))) {
+        detectedGenres.push(genre.charAt(0).toUpperCase() + genre.slice(1));
+      }
+    }
+
+    return {
+      originalQuery: query,
+      extractedKeywords: keywords,
+      suggestedGenres: detectedGenres,
+      searchTerms: [query, ...keywords.slice(0, 3)].filter(Boolean),
+    };
   }
 
   async generatePersonalizedRecommendations(
@@ -110,93 +210,141 @@ class LLMService {
         preferredAuthors: [],
       };
 
+      // Prepare book data for the prompt
       const booksData = availableBooks.slice(0, 50).map((book) => ({
         id: book.id,
         title: book.title,
         authors: book.authors,
         categories: book.categories,
-        description: book.description?.substring(0, 200) || "",
-        rating: book.rating,
+        description: book.description?.substring(0, 150) || "",
+        rating: book.rating || 0,
       }));
 
-      const systemInstruction =
-        "You are a book recommendation expert. Analyze user preferences and recommend books with detailed reasoning. Always respond with valid JSON.";
-
       const prompt = `
-        Based on this user's preferences, recommend books from the available list:
-        
-        User Preferences:
-        - Favorite Genres: ${
-          userPreferences.favoriteGenres.join(", ") || "None specified"
+      You are a book recommendation expert. Recommend books based on user preferences.
+
+      USER PREFERENCES:
+      - Favorite Genres: ${
+        userPreferences.favoriteGenres.join(", ") || "None specified"
+      }
+      - Preferred Authors: ${
+        userPreferences.preferredAuthors.join(", ") || "None specified"
+      }
+
+      AVAILABLE BOOKS (first 50):
+      ${JSON.stringify(booksData, null, 2)}
+
+      Provide recommendations as a JSON array with this exact format:
+      [
+        {
+          "bookId": "exact-book-id-from-list",
+          "score": 0.95,
+          "reason": "Detailed explanation why this book matches user preferences"
         }
-        - Preferred Authors: ${
-          userPreferences.preferredAuthors.join(", ") || "None specified"
-        }
-        
-        Available Books:
-        ${JSON.stringify(booksData, null, 2)}
-        
-        Please provide recommendations as a JSON array with this format:
-        [
-          {
-            "bookId": "book-id",
-            "score": 0.95,
-            "reason": "This book matches your interest in fantasy and has excellent ratings."
-          }
-        ]
-        
-        Provide up to ${limit} recommendations, scored from 0-1 based on relevance to user preferences.
-        
-        Respond only with valid JSON, no additional text.
+      ]
+
+      Guidelines:
+      - Score should be between 0.5 and 1.0
+      - Only recommend books from the available list
+      - Focus on genre and author matches
+      - Consider book ratings if available
+      - Return maximum ${limit} recommendations
+
+      Respond with ONLY the JSON array, no additional text.
       `;
 
-      const content = await this.generateContent(prompt, systemInstruction);
-
-      // Clean the response
+      const content = await this.generateContent(prompt);
       const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
       const recommendations = JSON.parse(cleanContent);
 
-      // Map recommendations to books and return
       const result: BookRecommendation[] = [];
 
-      for (const rec of recommendations) {
+      for (const rec of recommendations.slice(0, limit)) {
         const book = availableBooks.find((b) => b.id === rec.bookId);
         if (book) {
           result.push({
             book,
-            score: rec.score,
-            reason: rec.reason,
+            score: Math.min(Math.max(rec.score || 0.5, 0), 1),
+            reason: rec.reason || "Recommended based on your preferences",
           });
         }
       }
 
-      return result.slice(0, limit);
+      return result;
     } catch (error) {
       console.error("LLM recommendation error:", error);
+      return this.fallbackRecommendations(user, availableBooks, limit);
+    }
+  }
 
-      // Fallback to simple genre-based recommendations
-      const userGenres = user.preferences?.favoriteGenres || [];
-      const fallbackRecommendations: BookRecommendation[] = [];
+  private fallbackRecommendations(
+    user: User,
+    availableBooks: Book[],
+    limit: number = 10
+  ): BookRecommendation[] {
+    const userGenres = user.preferences?.favoriteGenres || [];
+    const userAuthors = user.preferences?.preferredAuthors || [];
 
-      for (const book of availableBooks.slice(0, limit)) {
-        const genreMatch = book.categories.some((cat) =>
-          userGenres.some((userGenre) =>
-            cat.toLowerCase().includes(userGenre.toLowerCase())
-          )
-        );
+    const scoredBooks = availableBooks.map((book) => {
+      let score = 0.3; // Base score
 
-        if (genreMatch || userGenres.length === 0) {
-          fallbackRecommendations.push({
-            book,
-            score: genreMatch ? 0.8 : 0.5,
-            reason: genreMatch
-              ? `Matches your interest in ${book.categories.join(", ")}`
-              : "Popular book you might enjoy",
-          });
-        }
-      }
+      // Genre matching
+      const genreMatch = book.categories.some((cat) =>
+        userGenres.some((userGenre) =>
+          cat.toLowerCase().includes(userGenre.toLowerCase())
+        )
+      );
+      if (genreMatch) score += 0.4;
 
-      return fallbackRecommendations.slice(0, limit);
+      // Author matching
+      const authorMatch = book.authors.some((author) =>
+        userAuthors.some((userAuthor) =>
+          author.toLowerCase().includes(userAuthor.toLowerCase())
+        )
+      );
+      if (authorMatch) score += 0.3;
+
+      // Rating boost
+      if (book.rating && book.rating > 4) score += 0.1;
+
+      return { book, score };
+    });
+
+    return scoredBooks
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ book, score }) => ({
+        book,
+        score,
+        reason: this.generateFallbackReason(book, userGenres, userAuthors),
+      }));
+  }
+
+  private generateFallbackReason(
+    book: Book,
+    userGenres: string[],
+    userAuthors: string[]
+  ): string {
+    const genreMatch = book.categories.some((cat) =>
+      userGenres.some((userGenre) =>
+        cat.toLowerCase().includes(userGenre.toLowerCase())
+      )
+    );
+
+    const authorMatch = book.authors.some((author) =>
+      userAuthors.some((userAuthor) =>
+        author.toLowerCase().includes(userAuthor.toLowerCase())
+      )
+    );
+
+    if (genreMatch && authorMatch) {
+      return `Matches your favorite genres and authors`;
+    } else if (genreMatch) {
+      return `Matches your interest in ${book.categories.join(", ")}`;
+    } else if (authorMatch) {
+      return `By an author you enjoy`;
+    } else {
+      return "Popular book you might enjoy";
     }
   }
 
@@ -208,159 +356,29 @@ class LLMService {
         )} - A ${book.categories.join(", ")} book.`;
       }
 
-      const systemInstruction =
-        "You are a book reviewer who writes compelling, concise summaries that help readers discover great books.";
-
       const prompt = `
-        Create a compelling, concise summary for this book:
-        
-        Title: ${book.title}
-        Authors: ${book.authors.join(", ")}
-        Categories: ${book.categories.join(", ")}
-        Description: ${book.description}
-        
-        Write a 2-3 sentence engaging summary that would help someone decide if they want to read this book.
-        
-        Respond with just the summary text, no additional formatting.
+      Create a compelling 2-3 sentence summary for this book that will help readers decide if they want to read it.
+
+      BOOK INFORMATION:
+      - Title: ${book.title}
+      - Author(s): ${book.authors.join(", ")}
+      - Categories: ${book.categories.join(", ")}
+      - Description: ${book.description}
+
+      Write an engaging summary that captures the essence of the book without spoilers.
+      Focus on what makes the book interesting and who would enjoy it.
       `;
 
-      const content = await this.generateContent(prompt, systemInstruction);
+      const content = await this.generateContent(prompt);
       return content.trim();
     } catch (error) {
       console.error("LLM summary generation error:", error);
       return (
         book.description?.substring(0, 200) + "..." ||
-        `${book.title} by ${book.authors.join(", ")}`
+        `${book.title} by ${book.authors.join(", ")} - ${book.categories.join(
+          ", "
+        )}`
       );
-    }
-  }
-
-  async findSimilarBooks(
-    book: Book,
-    availableBooks: Book[],
-    limit: number = 5
-  ): Promise<Book[]> {
-    try {
-      const booksData = availableBooks
-        .filter((b) => b.id !== book.id)
-        .slice(0, 30)
-        .map((b) => ({
-          id: b.id,
-          title: b.title,
-          authors: b.authors,
-          categories: b.categories,
-          description: b.description?.substring(0, 150) || "",
-        }));
-
-      const systemInstruction =
-        "You are a book similarity expert. Find books that readers would enjoy if they liked the target book. Always respond with valid JSON.";
-
-      const prompt = `
-        Find books similar to this target book:
-        
-        Target Book:
-        - Title: ${book.title}
-        - Authors: ${book.authors.join(", ")}
-        - Categories: ${book.categories.join(", ")}
-        - Description: ${
-          book.description?.substring(0, 200) || "No description"
-        }
-        
-        Available Books:
-        ${JSON.stringify(booksData, null, 2)}
-        
-        Return a JSON array of book IDs that are most similar to the target book, ordered by similarity:
-        ["book-id-1", "book-id-2", "book-id-3"]
-        
-        Consider genre, themes, writing style, and subject matter. Return up to ${limit} book IDs.
-        
-        Respond only with valid JSON, no additional text.
-      `;
-
-      const content = await this.generateContent(prompt, systemInstruction);
-
-      // Clean the response
-      const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
-      const similarBookIds = JSON.parse(cleanContent);
-
-      const similarBooks: Book[] = [];
-
-      for (const bookId of similarBookIds) {
-        const similarBook = availableBooks.find((b) => b.id === bookId);
-        if (similarBook) {
-          similarBooks.push(similarBook);
-        }
-      }
-
-      return similarBooks.slice(0, limit);
-    } catch (error) {
-      console.error("LLM similar books error:", error);
-
-      // Fallback to category-based similarity
-      return availableBooks
-        .filter(
-          (b) =>
-            b.id !== book.id &&
-            b.categories.some((cat) => book.categories.includes(cat))
-        )
-        .slice(0, limit);
-    }
-  }
-
-  // Additional method for Gemini-specific features
-  async analyzeReadingTaste(
-    user: User,
-    readingHistory: Book[]
-  ): Promise<{ insights: string; suggestedGenres: string[] }> {
-    try {
-      const systemInstruction =
-        "You are a literary analyst who provides insights about reading preferences and suggests new genres to explore.";
-
-      const prompt = `
-        Analyze this user's reading taste based on their reading history:
-        
-        User Preferences:
-        - Favorite Genres: ${
-          user.preferences?.favoriteGenres?.join(", ") || "None"
-        }
-        - Preferred Authors: ${
-          user.preferences?.preferredAuthors?.join(", ") || "None"
-        }
-        
-        Reading History (${readingHistory.length} books):
-        ${readingHistory
-          .slice(0, 10)
-          .map(
-            (book) =>
-              `- "${book.title}" by ${book.authors.join(
-                ", "
-              )} (${book.categories.join(", ")})`
-          )
-          .join("\n")}
-        
-        Provide a JSON response with:
-        {
-          "insights": "2-3 sentences about their reading patterns and preferences",
-          "suggestedGenres": ["array of 3-5 genres they might enjoy exploring"]
-        }
-        
-        Respond only with valid JSON, no additional text.
-      `;
-
-      const content = await this.generateContent(prompt, systemInstruction);
-      const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
-      return JSON.parse(cleanContent);
-    } catch (error) {
-      console.error("LLM reading taste analysis error:", error);
-      return {
-        insights:
-          "Based on your reading history, you enjoy diverse books across multiple genres.",
-        suggestedGenres: [
-          "Contemporary Fiction",
-          "Historical Fiction",
-          "Biography",
-        ],
-      };
     }
   }
 }

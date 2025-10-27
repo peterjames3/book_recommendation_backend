@@ -7,8 +7,12 @@
     "dev": "nodemon --watch src --ext ts --exec \"tsx src/server.ts\"",
     "seed": "tsx src/scripts/populateFromOpenLibrary.ts",
     "build": "tsc",
-    "start": "node dist/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node dist/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:api": "tsx src/scripts/test-api-key.ts",
+    "test:models": "tsx src/scripts/test-models.ts",
+    "test:llm": "tsx src/scripts/test-llm-service.ts",
+    "test:search": "tsx src/scripts/test-search-parsing.ts"
   },
   "keywords": [],
   "author": "James Kimani",
